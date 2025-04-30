@@ -3,6 +3,7 @@ import mysql.connector
 from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
+from linebot.models import MessageEvent, TextMessage  # 必須加上這一行
 
 app = Flask(__name__)
 
@@ -50,29 +51,4 @@ def callback():
     signature = request.headers["X-Line-Signature"]
 
     # 解析 webhook 請求
-    body = request.get_data(as_text=True)
-    
-    try:
-        # 處理訊息
-        handler.handle(body, signature)
-    except InvalidSignatureError:
-        abort(400)
-    
-    return "OK"
-
-@handler.add(MessageEvent, message=TextMessage)
-def handle_message(event):
-    user_id = event.source.user_id
-    user_text = event.message.text
-    
-    # 將用戶的訊息保存到資料庫
-    save_to_db(user_id, user_text)
-    
-    # 回應用戶的訊息
-    line_bot_api.reply_message(
-        event.reply_token,
-        TextSendMessage(text=f"收到你的訊息: {user_text}")
-    )
-
-if __name__ == "__main__":
-    app.run()
+    body = request.get
