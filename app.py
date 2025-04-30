@@ -15,11 +15,11 @@ line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
 
 # MySQL 連接配置
-MYSQL_HOST = os.getenv("MYSQL_HOST")
-MYSQL_PORT = int(os.getenv("MYSQL_PORT"))
-MYSQL_USER = os.getenv("MYSQL_USER")
-MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
-MYSQL_DATABASE = os.getenv("MYSQL_DATABASE")
+MYSQL_HOST = os.getenv("MYSQLHOST")
+MYSQL_PORT = int(os.getenv("MYSQLPORT"))
+MYSQL_USER = os.getenv("MYSQLUSER")
+MYSQL_PASSWORD = os.getenv("MYSQLPASSWORD")
+MYSQL_DATABASE = os.getenv("MYSQLDATABASE")
 
 def save_to_db(user_id, user_text):
     try:
