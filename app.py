@@ -3,13 +3,14 @@ import mysql.connector
 from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
-from linebot.models import MessageEvent, TextMessage  # 必須加上這一行
+from linebot.models import MessageEvent, TextMessage
 
 app = Flask(__name__)
 
-# Line Bot 設定
-LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
+# 設定 Line Bot 的 channel secret 和 access token
 LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
+LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
+
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
 
@@ -22,7 +23,7 @@ MYSQL_DATABASE = os.getenv("MYSQL_DATABASE")
 
 def save_to_db(user_id, user_text):
     try:
-        # 連接 MySQL 資料庫
+        # 連接到 MySQL
         conn = mysql.connector.connect(
             host=MYSQL_HOST,
             port=MYSQL_PORT,
@@ -31,24 +32,39 @@ def save_to_db(user_id, user_text):
             database=MYSQL_DATABASE
         )
         cursor = conn.cursor()
-        
-        # 插入資料到資料表
-        cursor.execute(
-            "INSERT INTO user_messages (user_id, user_text) VALUES (%s, %s)",
-            (user_id, user_text)
-        )
+        cursor.execute("INSERT INTO user_messages (user_id, user_text) VALUES (%s, %s)", (user_id, user_text))
         conn.commit()
-        
-        # 關閉游標和連接
         cursor.close()
         conn.close()
-    except mysql.connector.Error as err:
-        print(f"Error: {err}")
+    except Exception as e:
+        print(f"Error saving to database: {e}")
 
-@app.route("/callback", methods=["POST"])
-def callback():
-    # 獲取請求的簽名
-    signature = request.headers["X-Line-Signature"]
+# 處理 / 路由
+@app.route("/")
+def home():
+    return "LINE Bot is running!"
 
-    # 解析 webhook 請求
-    body = request.get
+# 處理 webhook 路由
+@app.route("/webhook", methods=["POST"])
+def webhook():
+    signature = request.headers['X-Line-Signature']
+    body = request.get_data(as_text=True)
+    try:
+        handler.handle(body, signature)
+    except InvalidSignatureError:
+        abort(400)
+    return 'OK'
+
+# 處理接收到的訊息
+@handler.add(MessageEvent, message=TextMessage)
+def handle_message(event):
+    user_id = event.source.user_id
+    user_text = event.message.text
+    save_to_db(user_id, user_text)  # 將訊息儲存至資料庫
+    line_bot_api.reply_message(
+        event.reply_token,
+        TextMessage(text=f"收到訊息：{user_text}")
+    )
+
+if __name__ == "__main__":
+    app.run(debug=True)
