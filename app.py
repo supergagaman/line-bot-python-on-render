@@ -1,21 +1,53 @@
-from flask import Flask, request, abort
-import mysql.connector
 import os
+import mysql.connector
+from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
-from linebot.exceptions import InvalidSignatureError
-from linebot.models import MessageEvent, TextMessage, TextSendMessage
+from linebot.exceptions import LineBotApiError
+from linebot.models import MessageEvent, TextMessage
 
 app = Flask(__name__)
 
-# 環境變數（Render → Environment）
-LINE_CHANNEL_ACCESS_TOKEN = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN")
-LINE_CHANNEL_SECRET = os.environ.get("LINE_CHANNEL_SECRET")
+# 設定 Line Bot 的 Channel Access Token 和 Secret
+LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
+LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
 
-# 初始化 LINE Bot
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
 
-# Webhook 路由
+# MySQL 連接配置
+MYSQL_HOST = os.getenv("MYSQL_HOST")
+MYSQL_PORT = int(os.getenv("MYSQL_PORT"))
+MYSQL_USER = os.getenv("MYSQL_USER")
+MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
+MYSQL_DATABASE = os.getenv("MYSQL_DATABASE")
+
+def save_to_db(user_id, user_text):
+    try:
+        # 連接到 MySQL
+        conn = mysql.connector.connect(
+            host=MYSQL_HOST,
+            port=MYSQL_PORT,
+            user=MYSQL_USER,
+            password=MYSQL_PASSWORD,
+            database=MYSQL_DATABASE
+        )
+        cursor = conn.cursor()
+        
+        # 插入資料
+        query = "INSERT INTO users (user_id, user_text) VALUES (%s, %s)"
+        cursor.execute(query, (user_id, user_text))
+        conn.commit()
+        
+        cursor.close()
+        conn.close()
+        
+        print("Data saved to database.")
+    
+    except mysql.connector.Error as err:
+        print(f"Error: {err}")
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+
 @app.route("/webhook", methods=["POST"])
 def webhook():
     signature = request.headers["X-Line-Signature"]
@@ -23,53 +55,27 @@ def webhook():
 
     try:
         handler.handle(body, signature)
-    except InvalidSignatureError:
+    except LineBotApiError as e:
+        print(f"Error: {e}")
         abort(400)
 
     return "OK"
 
-# 文字訊息處理
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     user_id = event.source.user_id
     user_text = event.message.text
-
+    
+    # 將使用者的訊息儲存到資料庫
     save_to_db(user_id, user_text)
 
-    line_bot_api.reply_message(
-        event.reply_token,
-        TextSendMessage(text="已收到您的訊息，謝謝！")
-    )
-
-# 儲存資料到 MySQL
-def save_to_db(user_id, message):
-    conn = mysql.connector.connect(
-        host=os.environ.get("MYSQLHOST"),
-        user=os.environ.get("MYSQLUSER"),
-        password=os.environ.get("MYSQLPASSWORD"),
-        database=os.environ.get("MYSQLDATABASE"),
-        port=os.environ.get("MYSQLPORT"),
-    )
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS messages (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            user_id VARCHAR(64),
-            message TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    try:
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextMessage(text="收到你的訊息！")
         )
-    """)
-    cursor.execute("INSERT INTO messages (user_id, message) VALUES (%s, %s)", (user_id, message))
-
-    conn.commit()
-    cursor.close()
-    conn.close()
-
-# 根目錄（Render 偵測健康用）
-@app.route("/")
-def home():
-    return "LINE Bot is running."
+    except LineBotApiError as e:
+        print(f"Error: {e}")
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    app.run(debug=True)
