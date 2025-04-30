@@ -5,10 +5,13 @@ from linebot.exceptions import InvalidSignatureError
 from linebot.models import MessageEvent, TextMessage, TextSendMessage
 import mysql.connector
 
+# ✅ 啟動確認 log
+print("✅ Flask App 啟動中...")
+
 # 初始化 Flask
 app = Flask(__name__)
 
-# 環境變數設定（Render 將從 .env 載入）
+# 環境變數設定
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
 LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
 DB_HOST = os.getenv("DB_HOST")
@@ -22,7 +25,7 @@ handler = WebhookHandler(LINE_CHANNEL_SECRET)
 
 @app.route("/")
 def home():
-    return "LINE Bot is running!"
+    return "✅ LINE Bot is running!"
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
@@ -41,14 +44,15 @@ def handle_message(event):
     user_id = event.source.user_id
     user_text = event.message.text
 
-    # 回覆用戶訊息
-    reply = f"你說了：{user_text}"
+    print(f"📩 收到訊息：{user_text}，來自：{user_id}")
+
+    # 回覆用戶
     line_bot_api.reply_message(
         event.reply_token,
-        TextSendMessage(text=reply)
+        TextSendMessage(text=f"你說了：{user_text}")
     )
 
-    # 寫入 MySQL 資料庫
+    # 寫入 MySQL 資料庫（收到訊息後再連線）
     try:
         conn = mysql.connector.connect(
             host=DB_HOST,
@@ -67,6 +71,10 @@ def handle_message(event):
         conn.commit()
         cursor.close()
         conn.close()
+        print("✅ 資料成功寫入 MySQL")
     except Exception as e:
         print("❌ 資料庫寫入失敗：", e)
 
+# ✅ 本地測試時使用 Flask 啟動（Render 使用 gunicorn 不會執行這段）
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=10000)
